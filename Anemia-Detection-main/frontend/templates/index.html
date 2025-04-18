@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anemia Detection System</title>
+    <style>
+        /* Background */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(to right, #ffdde1, #ee9ca7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            width: 80%;
+            max-width: 900px;
+            background: #fff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        h1 {
+            font-size: 28px;
+            color: #d72638;
+            margin-bottom: 10px;
+        }
+
+        .info-text {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: justify;
+        }
+
+        .highlight {
+            font-weight: bold;
+            color: #d72638;
+        }
+
+        /* Camera Section */
+        .camera-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        video, canvas {
+            width: 45%;
+            border-radius: 10px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        canvas {
+            display: none;
+        }
+
+        /* Buttons */
+        .button-group {
+            margin-top: 20px;
+        }
+
+        button {
+            background-color: #d72638;
+            color: #fff;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #a81c2a;
+            transform: scale(1.05);
+        }
+
+        /* Result */
+        .result {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 20px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🩸 Anemia Detection System</h1>
+        <p class="info-text">
+            <span class="highlight">About the Project:</span> This AI-powered system analyzes fingernail images to detect anemia. 
+            Using a deep learning model (Unsupervised learning), it provides a quick, non-invasive assessment.
+        </p>
+        <p class="info-text">
+            <span class="highlight">How it Works:</span> Start the camera, capture an image of your fingernails, and let the model analyze the results.
+        </p>
+        <p class="info-text">
+            <span class="highlight">Disclaimer:</span> This tool is <b>not</b> a medical diagnosis. If your confidence level is below <b>70%</b>, consult a doctor.
+        </p>
+        <p class="info-text">
+            <span class="highlight">Note:</span> Predictions variations are dependents on the <b>quality of the image also the light condition</b> try to capture nail alone for better <b>results</b>
+        </p>
+
+        <div class="camera-container">
+            <video id="video" autoplay></video>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="button-group">
+            <button id="startCamera">📷 Start Camera</button>
+            <button id="capture">📸 Capture Image</button>
+            <button id="predict">🔍 Check Anemia</button>
+        </div>
+
+        <p class="result" id="result"></p>
+    </div>
+
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const result = document.getElementById("result");
+        const startCameraBtn = document.getElementById("startCamera");
+        const captureBtn = document.getElementById("capture");
+        const predictBtn = document.getElementById("predict");
+
+        let capturedImage = null;
+        let videoStream = null;
+
+        // Start Camera
+        startCameraBtn.addEventListener("click", async () => {
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = videoStream;
+                console.log("📷 Camera started successfully.");
+            } catch (error) {
+                alert("Error accessing camera: " + error.message);
+            }
+        });
+
+        // Capture Image
+        captureBtn.addEventListener("click", () => {
+            const ctx = canvas.getContext("2d");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Hide video and show canvas
+            video.style.display = "none";
+            canvas.style.display = "block";
+
+            // Stop the camera
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+
+            // Convert canvas to Blob
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    capturedImage = blob;
+                    console.log("✅ Image captured successfully.");
+                } else {
+                    alert("Failed to capture image.");
+                }
+            }, "image/jpeg");
+        });
+
+        // Send Image for Prediction
+        predictBtn.addEventListener("click", async () => {
+            if (!capturedImage) {
+                alert("Please capture an image first!");
+                return;
+            }
+
+            console.log("🚀 Sending image to backend...");
+            const formData = new FormData();
+            formData.append("file", capturedImage, "nail.jpg");
+
+            try {
+                const response = await fetch("http://localhost:8000/api/predict", {
+                    method: "POST",
+                    body: formData,
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                });
+
+                console.log("Response status:", response.status);
+                if (!response.ok) throw new Error(`❌ Failed! Server responded with status: ${response.status}`);
+
+                const data = await response.json();
+                result.innerText = `Prediction: ${data.prediction} (Confidence: ${(data.confidence)*100}%)`;
+
+                // Show warning if confidence is below 70%
+                if (data.confidence*100 < 70) {
+                    result.innerHTML += "<br><span style='color: red;'>⚠️Anemia detected Please consult a doctor.</span>";
+                }
+
+                console.log("✅ Prediction result:", data.prediction);
+
+            } catch (error) {
+                console.error("Prediction Error:", error);
+                alert("Error sending image: " + error.message);
+            }
+        });
+
+    </script>
+</body>
+</html>
